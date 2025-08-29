@@ -133,3 +133,20 @@ body {
 .table-like { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
 
 .footer { text-align: center; padding: 40px 16px; opacity: .6; }
+
+/* Botão Tela de Diferenças */
+.diff-btn {
+  background-color: #00e676; /* verde brilhante */
+  color: #000; /* texto preto para contraste */
+  font-weight: bold;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.diff-btn:hover {
+  background-color: #00c853; /* verde mais forte ao passar o mouse */
+  transform: scale(1.05);
+}
