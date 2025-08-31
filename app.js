@@ -258,27 +258,20 @@ $('#btnRegistrarSangria').addEventListener('click', async () => {
 });
 
 async function renderParcial() {
-  // Helper para formato BR
-  const formatDateBR = (dateStr) => {
-    if (!dateStr) return '';
-    const [year, month, day] = dateStr.split("-");
-    return `${day}/${month}/${year}`;
-  };
-
-  // Lista simples de lançamentos + sangrias
   const base = `Usuário: ${currentUserDoc.nome} • Matrícula: ${currentUserDoc.matricula}\n`;
   const lref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'lancamentos');
-  const sref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'sangrias');
   const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
-  const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
 
   let total = 0;
   let out = base + '\nLANÇAMENTOS:\n';
   lqs.forEach(d => {
     const x = d.data();
     total += Number(x.valor||0);
-    out += `• ${formatDateBR(x.dataCaixa)} ${x.prefixo} ${x.tipoValidador} Qtd:${x.qtdBordos} Valor:${fmtMoney(x.valor)} Mot:${x.matriculaMotorista}\n`;
+    out += `• ${formatISOtoBR(x.dataCaixa)} ${x.prefixo} ${x.tipoValidador} Qtd:${x.qtdBordos} Valor:${fmtMoney(x.valor)} Mot:${x.matriculaMotorista}\n`;
   });
+
+  const sref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'sangrias');
+  const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
 
   let totalS = 0;
   if (!sqs.empty) {
@@ -296,6 +289,7 @@ async function renderParcial() {
 
   relatorioLista.textContent = out;
 }
+
 
 function printThermalReceipt(data) {
   const win = window.open('', '_blank', 'width=400,height=800');
@@ -346,7 +340,7 @@ function printThermalReceipt(data) {
   win.document.close();
 }
 
-// Função auxiliar para formatar YYYY-MM-DD → DD/MM/YYYY
+// Formata YYYY-MM-DD → DD/MM/YYYY
 function formatISOtoBR(isoDate) {
   if (!isoDate) return "";
   const [y, m, d] = isoDate.split("-");
@@ -427,13 +421,13 @@ async function gerarRelatorioPDF() {
     lqs.forEach(d => {
       const x = d.data();
       lancamentosBody.push([
-        formatISOtoBR(x.dataCaixa) || '',   // usa a data digitada pelo usuário
-        x.prefixo || '',
-        x.tipoValidador || '',
-        x.qtdBordos || '',
-        fmtMoney(x.valor) || 'R$ 0,00',
-        x.matriculaMotorista || ''
-      ]);
+  formatISOtoBR(x.dataCaixa), // agora garante data correta
+  x.prefixo || '',
+  x.tipoValidador || '',
+  x.qtdBordos || '',
+  fmtMoney(x.valor) || 'R$ 0,00',
+  x.matriculaMotorista || ''
+]);
       total += Number(x.valor || 0);
     });
 
