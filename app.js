@@ -7,13 +7,12 @@ import {
 const $ = (sel) => document.querySelector(sel);
 const fmtMoney = (v) => (Number(v || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// Função para pegar a data local no formato YYYY-MM-DD
 const todayISO = () => {
   const d = new Date();
   return d.toLocaleDateString('pt-BR').split('/').reverse().join('-');
 };
 
-// Função auxiliar para formatar YYYY-MM-DD → DD/MM/YYYY
+// Formata YYYY-MM-DD → DD/MM/YYYY
 function formatISOtoBR(isoDate) {
   if (!isoDate) return "";
   const [y, m, d] = isoDate.split("-");
@@ -58,19 +57,19 @@ const prefixo = $('#prefixo');
 const dataCaixa = $('#dataCaixa');
 const matMotorista = $('#matMotorista');
 
-// Update valor automatico = qtd * 5
+// Atualiza valor automaticamente
 const updateValor = () => {
   const q = Number(qtdBordos.value || 0);
   valor.value = (q * 5).toFixed(2);
 };
 qtdBordos.addEventListener('input', updateValor);
 
-// Prefixo: only digits and max 3
+// Prefixo: apenas dígitos e máximo 3
 prefixo.addEventListener('input', () => {
   prefixo.value = prefixo.value.replace(/\D/g, '').slice(0,3);
 });
 
-// Date default
+// Data default
 dataCaixa.value = todayISO();
 
 // ---- Auth flows ----
@@ -101,12 +100,8 @@ btnLogin.addEventListener('click', async () => {
   const mat = loginMatricula.value.trim();
   const senha = loginSenha.value;
   if (!mat || !senha) return alert('Informe matrícula e senha.');
-  try {
-    await signInWithEmailAndPassword(auth, emailFromMat(mat), senha);
-  } catch (e) {
-    console.error(e);
-    alert('Falha no login: ' + (e?.message || e));
-  }
+  try { await signInWithEmailAndPassword(auth, emailFromMat(mat), senha); }
+  catch (e) { alert('Falha no login: ' + (e?.message || e)); }
 });
 
 btnLogout.addEventListener('click', async () => { await signOut(auth); });
@@ -114,23 +109,15 @@ btnLogout.addEventListener('click', async () => { await signOut(auth); });
 btnChangePass.addEventListener('click', async () => {
   const nova = prompt('Digite a nova senha:');
   if (!nova) return;
-  try {
-    await updatePassword(auth.currentUser, nova);
-    alert('Senha alterada com sucesso.');
-  } catch (e) {
-    alert('Erro ao alterar senha: ' + (e?.message || e));
-  }
+  try { await updatePassword(auth.currentUser, nova); alert('Senha alterada com sucesso.'); }
+  catch (e) { alert('Erro ao alterar senha: ' + (e?.message || e)); }
 });
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
-    authArea.classList.remove('hidden');
-    appArea.classList.add('hidden');
-    userBadge.classList.add('hidden');
-    btnLogout.classList.add('hidden');
-    btnChangePass.classList.add('hidden');
-    currentUserDoc = null;
-    currentCaixaRef = null;
+    authArea.classList.remove('hidden'); appArea.classList.add('hidden'); userBadge.classList.add('hidden');
+    btnLogout.classList.add('hidden'); btnChangePass.classList.add('hidden');
+    currentUserDoc = null; currentCaixaRef = null;
     return;
   }
 
@@ -142,10 +129,8 @@ onAuthStateChanged(auth, async (user) => {
     currentUserDoc.admin = true;
   }
 
-  authArea.classList.add('hidden');
-  appArea.classList.remove('hidden');
-  btnLogout.classList.remove('hidden');
-  btnChangePass.classList.remove('hidden');
+  authArea.classList.add('hidden'); appArea.classList.remove('hidden');
+  btnLogout.classList.remove('hidden'); btnChangePass.classList.remove('hidden');
   matRecebedor.value = currentUserDoc.matricula;
 
   userBadge.textContent = `${currentUserDoc.nome} • ${currentUserDoc.matricula}`;
@@ -155,6 +140,7 @@ onAuthStateChanged(auth, async (user) => {
   await detectOrUpdateCaixaStatus();
 });
 
+// ---- Caixa ----
 async function detectOrUpdateCaixaStatus() {
   const uid = auth.currentUser.uid;
   const q1 = query(collection(db, 'users', uid, 'caixas'), where('status', '==', 'aberto'));
@@ -162,29 +148,20 @@ async function detectOrUpdateCaixaStatus() {
   if (!abertos.empty) {
     const docRef = abertos.docs[0].ref;
     currentCaixaRef = { userId: uid, caixaId: docRef.id };
-    setStatusUI('aberto');
-    enableWorkflows(true);
+    setStatusUI('aberto'); enableWorkflows(true);
     await renderParcial();
   } else {
-    currentCaixaRef = null;
-    setStatusUI('fechado');
-    enableWorkflows(false);
+    currentCaixaRef = null; setStatusUI('fechado'); enableWorkflows(false);
     relatorioLista.textContent = 'Sem lançamentos. Abra um caixa para iniciar.';
   }
 }
 
-function setStatusUI(status) {
-  caixaStatusEl.textContent = status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado';
-}
-
+function setStatusUI(status) { caixaStatusEl.textContent = status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'; }
 function enableWorkflows(aberto) {
-  btnAbrir.disabled = !!aberto;
-  btnFechar.disabled = !aberto;
-  lancBox.classList.toggle('hidden', !aberto);
-  sangriaBox.classList.toggle('hidden', !aberto);
+  btnAbrir.disabled = !!aberto; btnFechar.disabled = !aberto;
+  lancBox.classList.toggle('hidden', !aberto); sangriaBox.classList.toggle('hidden', !aberto);
 }
 
-// ---- Caixa controls ----
 btnAbrir.addEventListener('click', async () => {
   const uid = auth.currentUser.uid;
   const q1 = query(collection(db, 'users', uid, 'caixas'), where('status', '==', 'aberto'));
@@ -192,18 +169,13 @@ btnAbrir.addEventListener('click', async () => {
   if (!openDocs.empty) return alert('Você já possui um caixa aberto.');
 
   const caixa = {
-    status: 'aberto',
-    createdAt: serverTimestamp(),
-    data: dataCaixa.value,         
-    matricula: currentUserDoc.matricula,
-    nome: currentUserDoc.nome
+    status: 'aberto', createdAt: serverTimestamp(),
+    data: dataCaixa.value,
+    matricula: currentUserDoc.matricula, nome: currentUserDoc.nome
   };
   const ref = await addDoc(collection(db, 'users', uid, 'caixas'), caixa);
-  currentCaixaRef = { userId: uid, caixaId: ref.id };
-  setStatusUI('aberto');
-  enableWorkflows(true);
-  await renderParcial();
-  alert('Caixa aberto com sucesso.');
+  currentCaixaRef = { userId: uid, caixaId: ref.id }; setStatusUI('aberto'); enableWorkflows(true);
+  await renderParcial(); alert('Caixa aberto com sucesso.');
 });
 
 btnFechar.addEventListener('click', async () => {
@@ -211,13 +183,11 @@ btnFechar.addEventListener('click', async () => {
   await gerarRelatorioPDF();
   const ref = doc(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId);
   await updateDoc(ref, { status: 'fechado', closedAt: serverTimestamp() });
-  currentCaixaRef = null;
-  setStatusUI('fechado');
-  enableWorkflows(false);
+  currentCaixaRef = null; setStatusUI('fechado'); enableWorkflows(false);
   relatorioLista.textContent = 'Caixa encerrado. Abra um novo quando necessário.';
 });
 
-// ---- Lançamentos e Sangrias ----
+// ---- Lançamentos ----
 $('#btnSalvarLanc').addEventListener('click', async () => {
   if (!currentCaixaRef) return alert('Abra um caixa primeiro.');
   const dados = {
@@ -231,11 +201,8 @@ $('#btnSalvarLanc').addEventListener('click', async () => {
     createdAt: serverTimestamp()
   };
   if (!dados.qtdBordos || !dados.matriculaMotorista) return alert('Informe a quantidade e a matrícula do motorista.');
-
   const ref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'lancamentos');
-  await addDoc(ref, dados);
-  await renderParcial();
-  printThermalReceipt(dados);
+  await addDoc(ref, dados); await renderParcial(); printThermalReceipt(dados);
 });
 
 $('#btnRegistrarSangria').addEventListener('click', async () => {
@@ -245,12 +212,11 @@ $('#btnRegistrarSangria').addEventListener('click', async () => {
   if (valorS <= 0 || !motivo) return alert('Informe valor e motivo da sangria.');
   const ref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'sangrias');
   await addDoc(ref, { valor: valorS, motivo, createdAt: serverTimestamp() });
-  $('#sangriaValor').value = ''; $('#sangriaMotivo').value='';
-  await renderParcial();
+  $('#sangriaValor').value = ''; $('#sangriaMotivo').value=''; await renderParcial();
   alert('Sangria registrada.');
 });
 
-// ---- Render parcial com hora ----
+// ---- Relatório parcial com hora (corrigido) ----
 async function renderParcial() {
   const base = `Usuário: ${currentUserDoc.nome} • Matrícula: ${currentUserDoc.matricula}\n`;
   const lref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'lancamentos');
@@ -260,11 +226,14 @@ async function renderParcial() {
 
   let total = 0;
   let out = base + '\nLANÇAMENTOS:\n';
+  let horariosOut = '\nHORÁRIOS DE LANÇAMENTO:\n';
+
   lqs.forEach(d => {
     const x = d.data();
     total += Number(x.valor||0);
     const horaLancamento = x.createdAt?.toDate ? x.createdAt.toDate().toLocaleTimeString('pt-BR') : '';
     out += `• ${formatISOtoBR(x.dataCaixa)} ${horaLancamento} ${x.prefixo} ${x.tipoValidador} Qtd:${x.qtdBordos} Valor:${fmtMoney(x.valor)} Mot:${x.matriculaMotorista}\n`;
+    horariosOut += `• ${formatISOtoBR(x.dataCaixa)} ${horaLancamento} — Motorista: ${x.matriculaMotorista}, Qtd: ${x.qtdBordos}\n`;
   });
 
   let totalS = 0;
@@ -281,6 +250,9 @@ async function renderParcial() {
   out += `TOTAL SANGRIAS: ${fmtMoney(totalS)}\n`;
   out += `TOTAL CORRIGIDO: ${fmtMoney(total - totalS)}\n`;
 
+  // Adiciona os horários separados
+  out += horariosOut;
+
   relatorioLista.textContent = out;
 }
 
@@ -292,18 +264,16 @@ function printThermalReceipt(data) {
   const dataCaixaBR = formatISOtoBR(data.dataCaixa);
 
   const html = `<!DOCTYPE html>
-  <html><head><meta charset="utf-8">
-  <title>Recibo</title>
-  <style>
-    @page { size: 80mm 148mm; margin: 0mm; }
-    body { font-family: "Lucida Sans", Courier, monospace; font-size: 12px; margin: 0; padding: 0; }
-    h1 { text-align: center; font-size: 15px; margin: 8px 0 12px; margin-left: -25px; }
+  <html><head><meta charset="utf-8"><title>Recibo</title>
+  <style>@page { size: 80mm 148mm; margin: 0; }
+    body { font-family: "Lucida Sans", monospace; font-size: 12px; margin: 0; padding: 0; }
+    h1 { text-align: center; font-size: 15px; margin: 8px 0 12px; }
     .mono { font-family: "Lucida Sans", monospace; white-space: pre-wrap; }
   </style></head>
   <body onload="window.print(); setTimeout(()=>window.close(), 500);">
-    <h1>RECIBO DE PAGAMENTO MANUAL</h1>
+  <h1>RECIBO DE PAGAMENTO MANUAL</h1>
 --------------------------------------------------------------------
-    <div class="mono">
+  <div class="mono">
   <strong>Matricula Motorista:</strong> ${data.matriculaMotorista}<br>
   <strong>Tipo de Validador:</strong> ${data.tipoValidador}<br>
   <strong>Prefixo:</strong> ${data.prefixo}<br>
@@ -316,11 +286,10 @@ function printThermalReceipt(data) {
   <strong>Data Recebimento:</strong> ${dt}<br><br>
   <strong>Assinatura Recebedor:</strong><br>
          ________________________________
-    </div>
+  </div>
   </body></html>`;
 
-  win.document.write(html);
-  win.document.close();
+  win.document.write(html); win.document.close();
 }
 
 // ---- PDF relatório completo com hora ----
@@ -330,29 +299,23 @@ async function gerarRelatorioPDF() {
   const uid = currentCaixaRef.userId;
   const cid = currentCaixaRef.caixaId;
 
-  const logo = new Image();
-  logo.src = "./assets/logo.png";
+  const logo = new Image(); logo.src = "./assets/logo.png";
 
   logo.onload = async () => {
     const pageWidth = docpdf.internal.pageSize.getWidth();
-    const logoWidth = 120;
-    const logoHeight = 60;
+    const logoWidth = 120; const logoHeight = 60;
     const logoX = (pageWidth - logoWidth) / 2;
     docpdf.addImage(logo, 'PNG', logoX, 30, logoWidth, logoHeight);
 
-    docpdf.setDrawColor(0, 128, 0);
-    docpdf.setLineWidth(1.2);
+    docpdf.setDrawColor(0, 128, 0); docpdf.setLineWidth(1.2);
     docpdf.line(40, 100, pageWidth - 40, 100);
 
     let y = 120;
-    docpdf.setFont('helvetica','bold');
-    docpdf.setFontSize(16);
+    docpdf.setFont('helvetica','bold'); docpdf.setFontSize(16);
     docpdf.text('Relatório de Fechamento de Caixa', pageWidth / 2, y, { align: 'center' });
     y += 30;
 
-    docpdf.setFontSize(11);
-    docpdf.setFont('helvetica','normal');
-
+    docpdf.setFontSize(11); docpdf.setFont('helvetica','normal');
     const hoje = new Date();
     const dataHoraBR = hoje.toLocaleDateString('pt-BR') + " " + hoje.toLocaleTimeString('pt-BR');
 
@@ -370,20 +333,11 @@ async function gerarRelatorioPDF() {
 
     const lref = collection(db, 'users', uid, 'caixas', cid, 'lancamentos');
     const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
-    const lancamentosBody = [];
-    let total = 0;
+    const lancamentosBody = []; let total = 0;
     lqs.forEach(d => {
-      const x = d.data();
-      total += Number(x.valor || 0);
+      const x = d.data(); total += Number(x.valor || 0);
       let horaLancamento = x.createdAt?.toDate ? x.createdAt.toDate().toLocaleTimeString("pt-BR") : '';
-      lancamentosBody.push([
-        `${formatISOtoBR(x.dataCaixa)} ${horaLancamento}`,
-        x.prefixo || '',
-        x.tipoValidador || '',
-        x.qtdBordos || '',
-        fmtMoney(x.valor) || 'R$ 0,00',
-        x.matriculaMotorista || ''
-      ]);
+      lancamentosBody.push([`${formatISOtoBR(x.dataCaixa)} ${horaLancamento}`, x.prefixo||'', x.tipoValidador||'', x.qtdBordos||'', fmtMoney(x.valor)||'R$ 0,00', x.matriculaMotorista||'']);
     });
 
     docpdf.autoTable({
@@ -393,26 +347,15 @@ async function gerarRelatorioPDF() {
       theme: 'grid',
       headStyles: { fillColor: [200,200,200], textColor: 20, fontStyle: 'bold' },
       styles: { fontSize: 10, halign: 'center' },
-      columnStyles: {
-        0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' },
-        3: { halign: 'center' }, 4: { halign: 'right' }, 5: { halign: 'center' }
-      }
+      columnStyles: { 0:{halign:'center'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'},4:{halign:'right'},5:{halign:'center'} }
     });
 
     let y2 = docpdf.lastAutoTable.finalY + 20;
-
     const sref = collection(db, 'users', uid, 'caixas', cid, 'sangrias');
     const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
-    const sangriasBody = [];
-    let totalS = 0;
-    if (sqs.empty) { sangriasBody.push(['— Nenhuma', '']); } 
-    else {
-      sqs.forEach(d => {
-        const x = d.data();
-        sangriasBody.push([fmtMoney(x.valor), x.motivo || '']);
-        totalS += Number(x.valor || 0);
-      });
-    }
+    const sangriasBody = []; let totalS = 0;
+    if (sqs.empty) { sangriasBody.push(['— Nenhuma','']); } 
+    else { sqs.forEach(d => { const x=d.data(); sangriasBody.push([fmtMoney(x.valor),x.motivo||'']); totalS+=Number(x.valor||0); }); }
 
     docpdf.autoTable({
       startY: y2,
@@ -421,11 +364,10 @@ async function gerarRelatorioPDF() {
       theme: 'grid',
       headStyles: { fillColor: [200,200,200], textColor: 20, fontStyle: 'bold' },
       styles: { fontSize: 10, halign: 'center' },
-      columnStyles: { 0: { halign: 'right' }, 1: { halign: 'left' } }
+      columnStyles: {0:{halign:'right'},1:{halign:'left'}}
     });
 
     y2 = docpdf.lastAutoTable.finalY + 20;
-
     docpdf.setFont('helvetica','bold');
     docpdf.text(`TOTAL LANÇAMENTOS: ${fmtMoney(total)}`, 40, y2); y2+=16;
     docpdf.text(`TOTAL SANGRIAS: ${fmtMoney(totalS)}`, 40, y2); y2+=16;
@@ -433,8 +375,9 @@ async function gerarRelatorioPDF() {
     docpdf.setFont('helvetica','normal');
     docpdf.text('Fechamento resumido. Documento gerado automaticamente.', 40, y2);
 
-    const hojeNome = hoje.toLocaleDateString("pt-BR").replace(/\//g, "-");
+    const hojeNome = hoje.toLocaleDateString("pt-BR").replace(/\//g,"-");
     const fileName = `${currentUserDoc.matricula}-${hojeNome}.pdf`;
     docpdf.save(fileName);
   };
 }
+
