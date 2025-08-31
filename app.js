@@ -346,6 +346,13 @@ function printThermalReceipt(data) {
   win.document.close();
 }
 
+// Função auxiliar para formatar YYYY-MM-DD → DD/MM/YYYY
+function formatISOtoBR(isoDate) {
+  if (!isoDate) return "";
+  const [y, m, d] = isoDate.split("-");
+  return `${d}/${m}/${y}`;
+}
+
 async function gerarRelatorioPDF() {
   const { jsPDF } = window.jspdf;
   const docpdf = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -416,7 +423,7 @@ async function gerarRelatorioPDF() {
     lqs.forEach(d => {
       const x = d.data();
       lancamentosBody.push([
-        new Date(x.dataCaixa).toLocaleDateString("pt-BR") || '',
+        formatISOtoBR(x.dataCaixa) || '',   // <<< corrigido aqui
         x.prefixo || '',
         x.tipoValidador || '',
         x.qtdBordos || '',
@@ -443,6 +450,15 @@ async function gerarRelatorioPDF() {
       }
     });
 
+    // Total no fim
+    const finalY = docpdf.lastAutoTable.finalY + 20;
+    docpdf.setFont('helvetica','bold');
+    docpdf.setFontSize(12);
+    docpdf.text(`Total: ${fmtMoney(total)}`, 40, finalY);
+
+    docpdf.save("relatorio.pdf");
+  };
+}
     y = docpdf.lastAutoTable.finalY + 20;
 
     // =============================
