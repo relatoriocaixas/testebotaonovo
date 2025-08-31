@@ -13,7 +13,7 @@ const todayISO = () => {
   return d.toLocaleDateString('pt-BR').split('/').reverse().join('-');
 };
 
-// Formata YYYY-MM-DD → DD/MM/YYYY
+// Função auxiliar para formatar YYYY-MM-DD → DD/MM/YYYY (única declaração!)
 function formatISOtoBR(isoDate) {
   if (!isoDate) return "";
   const [y, m, d] = isoDate.split("-");
@@ -24,8 +24,8 @@ const adminsMat = new Set(['4144','70029','6266']);
 const emailFromMat = (mat) => `${mat}@movebuss.com`;
 
 // State
-let currentUserDoc = null; // Firestore user doc data
-let currentCaixaRef = null; // { userId, caixaId }
+let currentUserDoc = null;
+let currentCaixaRef = null;
 
 // Elements
 const authArea = $('#authArea');
@@ -109,19 +109,13 @@ btnLogin.addEventListener('click', async () => {
   }
 });
 
-btnLogout.addEventListener('click', async () => {
-  await signOut(auth);
-});
+btnLogout.addEventListener('click', async () => { await signOut(auth); });
 
 btnChangePass.addEventListener('click', async () => {
   const nova = prompt('Digite a nova senha:');
   if (!nova) return;
-  try {
-    await updatePassword(auth.currentUser, nova);
-    alert('Senha alterada com sucesso.');
-  } catch (e) {
-    alert('Erro ao alterar senha: ' + (e?.message || e));
-  }
+  try { await updatePassword(auth.currentUser, nova); alert('Senha alterada com sucesso.'); }
+  catch (e) { alert('Erro ao alterar senha: ' + (e?.message || e)); }
 });
 
 onAuthStateChanged(auth, async (user) => {
@@ -147,7 +141,6 @@ onAuthStateChanged(auth, async (user) => {
   btnLogout.classList.remove('hidden');
   btnChangePass.classList.remove('hidden');
   matRecebedor.value = currentUserDoc.matricula;
-
   userBadge.textContent = `${currentUserDoc.nome} • ${currentUserDoc.matricula}`;
   userBadge.classList.remove('hidden');
   if (currentUserDoc.admin) userBadge.classList.add('admin'); else userBadge.classList.remove('admin');
@@ -173,16 +166,8 @@ async function detectOrUpdateCaixaStatus() {
   }
 }
 
-function setStatusUI(status) {
-  caixaStatusEl.textContent = status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado';
-}
-
-function enableWorkflows(aberto) {
-  btnAbrir.disabled = !!aberto;
-  btnFechar.disabled = !aberto;
-  lancBox.classList.toggle('hidden', !aberto);
-  sangriaBox.classList.toggle('hidden', !aberto);
-}
+function setStatusUI(status) { caixaStatusEl.textContent = status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'; }
+function enableWorkflows(aberto) { btnAbrir.disabled = !!aberto; btnFechar.disabled = !aberto; lancBox.classList.toggle('hidden', !aberto); sangriaBox.classList.toggle('hidden', !aberto); }
 
 // ---- Caixa controls ----
 btnAbrir.addEventListener('click', async () => {
@@ -190,11 +175,10 @@ btnAbrir.addEventListener('click', async () => {
   const q1 = query(collection(db, 'users', uid, 'caixas'), where('status', '==', 'aberto'));
   const openDocs = await getDocs(q1);
   if (!openDocs.empty) return alert('Você já possui um caixa aberto.');
-
   const caixa = {
     status: 'aberto',
     createdAt: serverTimestamp(),
-    data: dataCaixa.value,   // data digitada pelo usuário
+    data: dataCaixa.value,
     matricula: currentUserDoc.matricula,
     nome: currentUserDoc.nome
   };
@@ -225,7 +209,7 @@ $('#btnSalvarLanc').addEventListener('click', async () => {
     qtdBordos: Number(qtdBordos.value || 0),
     valor: Number(valor.value || 0),
     prefixo: '55' + (prefixo.value || '000'),
-    dataCaixa: dataCaixa.value,       // string, nunca Date
+    dataCaixa: dataCaixa.value,
     matriculaMotorista: (matMotorista.value || '').trim(),
     matriculaRecebedor: currentUserDoc.matricula,
     createdAt: serverTimestamp()
@@ -256,6 +240,8 @@ async function renderParcial() {
   const base = `Usuário: ${currentUserDoc.nome} • Matrícula: ${currentUserDoc.matricula}\n`;
   const lref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'lancamentos');
   const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
+  const sref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'sangrias');
+  const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
 
   let total = 0;
   let out = base + '\nLANÇAMENTOS:\n';
@@ -264,9 +250,6 @@ async function renderParcial() {
     total += Number(x.valor||0);
     out += `• ${formatISOtoBR(x.dataCaixa)} ${x.prefixo} ${x.tipoValidador} Qtd:${x.qtdBordos} Valor:${fmtMoney(x.valor)} Mot:${x.matriculaMotorista}\n`;
   });
-
-  const sref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'sangrias');
-  const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
 
   let totalS = 0;
   if (!sqs.empty) {
@@ -285,144 +268,11 @@ async function renderParcial() {
   relatorioLista.textContent = out;
 }
 
-// ---- Função PDF corrigida ----
-async function gerarRelatorioPDF() {
-  const { jsPDF } = window.jspdf;
-  const docpdf = new jsPDF({ unit: 'pt', format: 'a4' });
-  const uid = currentCaixaRef.userId;
-  const cid = currentCaixaRef.caixaId;
-
-  const logo = new Image();
-  logo.src = "./assets/logo.png";
-
-  logo.onload = async () => {
-    const pageWidth = docpdf.internal.pageSize.getWidth();
-    const logoWidth = 120;
-    const logoHeight = 60;
-    const logoX = (pageWidth - logoWidth) / 2;
-    docpdf.addImage(logo, 'PNG', logoX, 30, logoWidth, logoHeight);
-
-    docpdf.setDrawColor(0, 128, 0);
-    docpdf.setLineWidth(1.2);
-    docpdf.line(40, 100, pageWidth - 40, 100);
-
-    let y = 120;
-    docpdf.setFont('helvetica','bold');
-    docpdf.setFontSize(16);
-    docpdf.text('Relatório de Fechamento de Caixa', pageWidth / 2, y, { align: 'center' });
-    y += 30;
-
-    docpdf.setFontSize(11);
-    docpdf.setFont('helvetica','normal');
-
-    const hoje = new Date();
-    const dataHoraBR = hoje.toLocaleDateString('pt-BR') + " " + hoje.toLocaleTimeString('pt-BR');
-
-    const caixaSnap = await getDoc(doc(db, 'users', uid, 'caixas', cid));
-    const caixaData = caixaSnap.data();
-    let aberturaTxt = "";
-    if (caixaData?.data) {
-      const aberturaHora = caixaData?.createdAt?.toDate 
-                          ? caixaData.createdAt.toDate().toLocaleTimeString("pt-BR") 
-                          : "";
-      aberturaTxt = formatISOtoBR(caixaData.data) + (aberturaHora ? " " + aberturaHora : "");
-    }
-
-    docpdf.text(`Operador: ${currentUserDoc.nome}  • Matrícula: ${currentUserDoc.matricula}`, 40, y);
-    y += 16;
-
-    if (aberturaTxt) {
-      docpdf.text(`Abertura do caixa: ${aberturaTxt}`, 40, y);
-      y += 16;
-    }
-
-    docpdf.text(`Data do fechamento: ${dataHoraBR}`, 40, y);
-    y += 22;
-
-    const lref = collection(db, 'users', uid, 'caixas', cid, 'lancamentos');
-    const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
-    const lancamentosBody = [];
-    let total = 0;
-    lqs.forEach(d => {
-      const x = d.data();
-      lancamentosBody.push([
-        formatISOtoBR(x.dataCaixa),
-        x.prefixo || '',
-        x.tipoValidador || '',
-        x.qtdBordos || '',
-        fmtMoney(x.valor) || 'R$ 0,00',
-        x.matriculaMotorista || ''
-      ]);
-      total += Number(x.valor || 0);
-    });
-
-    docpdf.autoTable({
-      startY: y,
-      head: [['Data Caixa','Prefixo','Validador','Qtd Bordos','Valor','Motorista']],
-      body: lancamentosBody,
-      theme: 'grid',
-      headStyles: { fillColor: [200,200,200], textColor: 20, fontStyle: 'bold' },
-      styles: { fontSize: 10, halign: 'center' },
-      columnStyles: {
-        0: { halign: 'center' },
-        1: { halign: 'center' },
-        2: { halign: 'center' },
-        3: { halign: 'center' },
-        4: { halign: 'right' },
-        5: { halign: 'center' }
-      }
-    });
-
-    let y2 = docpdf.lastAutoTable.finalY + 20;
-    const sref = collection(db, 'users', uid, 'caixas', cid, 'sangrias');
-    const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
-    const sangriasBody = [];
-    let totalS = 0;
-    if (sqs.empty) {
-      sangriasBody.push(['— Nenhuma', '']);
-    } else {
-      sqs.forEach(d => {
-        const x = d.data();
-        sangriasBody.push([
-          fmtMoney(x.valor),
-          x.motivo || ''
-        ]);
-        totalS += Number(x.valor || 0);
-      });
-    }
-
-    docpdf.autoTable({
-      startY: y2,
-      head: [['Valor','Motivo']],
-      body: sangriasBody,
-      theme: 'grid',
-      headStyles: { fillColor: [200,200,200], textColor: 20, fontStyle: 'bold' },
-      styles: { fontSize: 10, halign: 'center' },
-      columnStyles: { 0: { halign: 'right' }, 1: { halign: 'left' } }
-    });
-
-    y2 = docpdf.lastAutoTable.finalY + 20;
-
-    docpdf.setFont('helvetica','bold');
-    docpdf.text(`TOTAL LANÇAMENTOS: ${fmtMoney(total)}`, 40, y2); y2+=16;
-    docpdf.text(`TOTAL SANGRIAS: ${fmtMoney(totalS)}`, 40, y2); y2+=16;
-    docpdf.text(`TOTAL CORRIGIDO: ${fmtMoney(total - totalS)}`, 40, y2); y2+=22;
-    docpdf.setFont('helvetica','normal');
-    docpdf.text('Fechamento resumido. Documento gerado automaticamente.', 40, y2);
-
-    const hojeNome = hoje.toLocaleDateString("pt-BR").replace(/\//g, "-");
-    const fileName = `${currentUserDoc.matricula}-${hojeNome}.pdf`;
-
-    docpdf.save(fileName);
-  };
-}
-
 // ---- Recibo térmico ----
 function printThermalReceipt(data) {
   const win = window.open('', '_blank', 'width=400,height=800');
   const now = new Date();
   const dt = now.toLocaleString('pt-BR');
-
   const dataCaixaBR = formatISOtoBR(data.dataCaixa);
 
   const html = `<!DOCTYPE html>
@@ -457,22 +307,13 @@ function printThermalReceipt(data) {
   win.document.close();
 }
 
-
-// Formata YYYY-MM-DD → DD/MM/YYYY
-function formatISOtoBR(isoDate) {
-  if (!isoDate) return "";
-  const [y, m, d] = isoDate.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-
+// ---- PDF relatório ----
 async function gerarRelatorioPDF() {
   const { jsPDF } = window.jspdf;
   const docpdf = new jsPDF({ unit: 'pt', format: 'a4' });
   const uid = currentCaixaRef.userId;
   const cid = currentCaixaRef.caixaId;
 
-  // === Inserir logo no cabeçalho ===
   const logo = new Image();
   logo.src = "./assets/logo.png";
 
@@ -481,71 +322,54 @@ async function gerarRelatorioPDF() {
     const logoWidth = 120;
     const logoHeight = 60;
     const logoX = (pageWidth - logoWidth) / 2;
-
     docpdf.addImage(logo, 'PNG', logoX, 30, logoWidth, logoHeight);
 
-    // Linha separadora
     docpdf.setDrawColor(0, 128, 0);
     docpdf.setLineWidth(1.2);
     docpdf.line(40, 100, pageWidth - 40, 100);
 
-    // === Cabeçalho ===
     let y = 120;
     docpdf.setFont('helvetica','bold');
     docpdf.setFontSize(16);
     docpdf.text('Relatório de Fechamento de Caixa', pageWidth / 2, y, { align: 'center' });
     y += 30;
 
-    // Dados do operador
     docpdf.setFontSize(11);
     docpdf.setFont('helvetica','normal');
+
     const hoje = new Date();
     const dataHoraBR = hoje.toLocaleDateString('pt-BR') + " " + hoje.toLocaleTimeString('pt-BR');
 
-    // Pega dados do caixa (data de abertura)
     const caixaSnap = await getDoc(doc(db, 'users', uid, 'caixas', cid));
     const caixaData = caixaSnap.data();
     let aberturaTxt = "";
     if (caixaData?.data) {
-      // Usa a data digitada pelo usuário + hora de criação
       const aberturaHora = caixaData?.createdAt?.toDate 
                           ? caixaData.createdAt.toDate().toLocaleTimeString("pt-BR") 
                           : "";
       aberturaTxt = formatISOtoBR(caixaData.data) + (aberturaHora ? " " + aberturaHora : "");
     }
 
-    // Linha de operador
     docpdf.text(`Operador: ${currentUserDoc.nome}  • Matrícula: ${currentUserDoc.matricula}`, 40, y);
     y += 16;
-
-    // Primeiro a abertura
-    if (aberturaTxt) {
-      docpdf.text(`Abertura do caixa: ${aberturaTxt}`, 40, y);
-      y += 16;
-    }
-
-    // Depois o fechamento (emissão do PDF)
+    if (aberturaTxt) { docpdf.text(`Abertura do caixa: ${aberturaTxt}`, 40, y); y += 16; }
     docpdf.text(`Data do fechamento: ${dataHoraBR}`, 40, y);
     y += 22;
 
-    // =============================
-    // LANÇAMENTOS EM TABELA
-    // =============================
     const lref = collection(db, 'users', uid, 'caixas', cid, 'lancamentos');
     const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
-
     const lancamentosBody = [];
     let total = 0;
     lqs.forEach(d => {
       const x = d.data();
       lancamentosBody.push([
-  formatISOtoBR(x.dataCaixa), // agora garante data correta
-  x.prefixo || '',
-  x.tipoValidador || '',
-  x.qtdBordos || '',
-  fmtMoney(x.valor) || 'R$ 0,00',
-  x.matriculaMotorista || ''
-]);
+        formatISOtoBR(x.dataCaixa),
+        x.prefixo || '',
+        x.tipoValidador || '',
+        x.qtdBordos || '',
+        fmtMoney(x.valor) || 'R$ 0,00',
+        x.matriculaMotorista || ''
+      ]);
       total += Number(x.valor || 0);
     });
 
@@ -556,70 +380,37 @@ async function gerarRelatorioPDF() {
       theme: 'grid',
       headStyles: { fillColor: [200,200,200], textColor: 20, fontStyle: 'bold' },
       styles: { fontSize: 10, halign: 'center' },
-      columnStyles: {
-        0: { halign: 'center' },
-        1: { halign: 'center' },
-        2: { halign: 'center' },
-        3: { halign: 'center' },
-        4: { halign: 'right' },
-        5: { halign: 'center' }
-      }
+      columnStyles: { 0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'right' }, 5: { halign: 'center' } }
     });
 
-    // Total no fim
-    let finalY = docpdf.lastAutoTable.finalY + 20;
-    docpdf.setFont('helvetica','bold');
-    docpdf.setFontSize(12);
-    docpdf.text(`Total: ${fmtMoney(total)}`, 40, finalY);
+    let y2 = docpdf.lastAutoTable.finalY + 20;
 
-    // =============================
-    // SANGRIAS EM TABELA
-    // =============================
     const sref = collection(db, 'users', uid, 'caixas', cid, 'sangrias');
     const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
     const sangriasBody = [];
     let totalS = 0;
+    if (sqs.empty) { sangriasBody.push(['— Nenhuma', '']); } 
+    else { sqs.forEach(d => { const x=d.data(); sangriasBody.push([fmtMoney(x.valor), x.motivo||'']); totalS+=Number(x.valor||0); }); }
 
-    if (sqs.empty) {
-      sangriasBody.push(['— Nenhuma', '']);
-    } else {
-      sqs.forEach(d => {
-        const x = d.data();
-        sangriasBody.push([
-          fmtMoney(x.valor),
-          x.motivo || ''
-        ]);
-        totalS += Number(x.valor || 0);
-      });
-    }
-
-    y = finalY + 20;
     docpdf.autoTable({
-      startY: y,
+      startY: y2,
       head: [['Valor','Motivo']],
       body: sangriasBody,
       theme: 'grid',
       headStyles: { fillColor: [200,200,200], textColor: 20, fontStyle: 'bold' },
       styles: { fontSize: 10, halign: 'center' },
-      columnStyles: {
-        0: { halign: 'right' },
-        1: { halign: 'left' }
-      }
+      columnStyles: { 0: { halign: 'right' }, 1: { halign: 'left' } }
     });
 
-    y = docpdf.lastAutoTable.finalY + 20;
+    y2 = docpdf.lastAutoTable.finalY + 20;
 
-    // =============================
-    // TOTAIS
-    // =============================
     docpdf.setFont('helvetica','bold');
-    docpdf.text(`TOTAL LANÇAMENTOS: ${fmtMoney(total)}`, 40, y); y+=16;
-    docpdf.text(`TOTAL SANGRIAS: ${fmtMoney(totalS)}`, 40, y); y+=16;
-    docpdf.text(`TOTAL CORRIGIDO: ${fmtMoney(total - totalS)}`, 40, y); y+=22;
+    docpdf.text(`TOTAL LANÇAMENTOS: ${fmtMoney(total)}`, 40, y2); y2+=16;
+    docpdf.text(`TOTAL SANGRIAS: ${fmtMoney(totalS)}`, 40, y2); y2+=16;
+    docpdf.text(`TOTAL CORRIGIDO: ${fmtMoney(total - totalS)}`, 40, y2); y2+=22;
     docpdf.setFont('helvetica','normal');
-    docpdf.text('Fechamento resumido. Documento gerado automaticamente.', 40, y);
+    docpdf.text('Fechamento resumido. Documento gerado automaticamente.', 40, y2);
 
-    // Nome do arquivo no padrão brasileiro
     const hojeNome = hoje.toLocaleDateString("pt-BR").replace(/\//g, "-");
     const fileName = `${currentUserDoc.matricula}-${hojeNome}.pdf`;
 
