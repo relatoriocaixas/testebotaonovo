@@ -6,7 +6,13 @@ import {
 // ---- Helpers ----
 const $ = (sel) => document.querySelector(sel);
 const fmtMoney = (v) => (Number(v || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const todayISO = () => new Date().toISOString().slice(0,10);
+
+// Função para pegar a data local no formato YYYY-MM-DD
+const todayISO = () => {
+  const d = new Date();
+  return d.toLocaleDateString('pt-BR').split('/').reverse().join('-');
+};
+
 const adminsMat = new Set(['4144','70029','6266']);
 const emailFromMat = (mat) => `${mat}@movebuss.com`;
 
