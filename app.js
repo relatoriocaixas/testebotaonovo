@@ -353,6 +353,7 @@ function formatISOtoBR(isoDate) {
   return `${d}/${m}/${y}`;
 }
 
+
 async function gerarRelatorioPDF() {
   const { jsPDF } = window.jspdf;
   const docpdf = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -393,9 +394,12 @@ async function gerarRelatorioPDF() {
     const caixaSnap = await getDoc(doc(db, 'users', uid, 'caixas', cid));
     const caixaData = caixaSnap.data();
     let aberturaTxt = "";
-    if (caixaData?.createdAt?.toDate) {
-      const abertura = caixaData.createdAt.toDate();
-      aberturaTxt = abertura.toLocaleDateString("pt-BR") + " " + abertura.toLocaleTimeString("pt-BR");
+    if (caixaData?.data) {
+      // Usa a data digitada pelo usuário + hora de criação
+      const aberturaHora = caixaData?.createdAt?.toDate 
+                          ? caixaData.createdAt.toDate().toLocaleTimeString("pt-BR") 
+                          : "";
+      aberturaTxt = formatISOtoBR(caixaData.data) + (aberturaHora ? " " + aberturaHora : "");
     }
 
     // Linha de operador
@@ -423,7 +427,7 @@ async function gerarRelatorioPDF() {
     lqs.forEach(d => {
       const x = d.data();
       lancamentosBody.push([
-        formatISOtoBR(x.dataCaixa) || '',   // <<< corrigido aqui
+        formatISOtoBR(x.dataCaixa) || '',   // usa a data digitada pelo usuário
         x.prefixo || '',
         x.tipoValidador || '',
         x.qtdBordos || '',
@@ -451,15 +455,10 @@ async function gerarRelatorioPDF() {
     });
 
     // Total no fim
-    const finalY = docpdf.lastAutoTable.finalY + 20;
+    let finalY = docpdf.lastAutoTable.finalY + 20;
     docpdf.setFont('helvetica','bold');
     docpdf.setFontSize(12);
     docpdf.text(`Total: ${fmtMoney(total)}`, 40, finalY);
-
-    docpdf.save("relatorio.pdf");
-  };
-}
-    y = docpdf.lastAutoTable.finalY + 20;
 
     // =============================
     // SANGRIAS EM TABELA
@@ -482,6 +481,7 @@ async function gerarRelatorioPDF() {
       });
     }
 
+    y = finalY + 20;
     docpdf.autoTable({
       startY: y,
       head: [['Valor','Motivo']],
