@@ -194,11 +194,11 @@ btnAbrir.addEventListener('click', async () => {
   if (!openDocs.empty) return alert('Você já possui um caixa aberto.');
 
   const caixa = {
-    status: 'aberto',
-    createdAt: serverTimestamp(),
-    data: todayISO(),
-    matricula: currentUserDoc.matricula,
-    nome: currentUserDoc.nome
+  status: 'aberto',
+  createdAt: serverTimestamp(),
+  data: dataCaixa.value,         
+  matricula: currentUserDoc.matricula,
+  nome: currentUserDoc.nome
   };
   const ref = await addDoc(collection(db, 'users', uid, 'caixas'), caixa);
   currentCaixaRef = { userId: uid, caixaId: ref.id };
