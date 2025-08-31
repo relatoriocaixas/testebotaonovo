@@ -13,7 +13,7 @@ const todayISO = () => {
   return d.toLocaleDateString('pt-BR').split('/').reverse().join('-');
 };
 
-// Função auxiliar para formatar YYYY-MM-DD → DD/MM/YYYY (única declaração!)
+// Função auxiliar para formatar YYYY-MM-DD → DD/MM/YYYY
 function formatISOtoBR(isoDate) {
   if (!isoDate) return "";
   const [y, m, d] = isoDate.split("-");
@@ -114,8 +114,12 @@ btnLogout.addEventListener('click', async () => { await signOut(auth); });
 btnChangePass.addEventListener('click', async () => {
   const nova = prompt('Digite a nova senha:');
   if (!nova) return;
-  try { await updatePassword(auth.currentUser, nova); alert('Senha alterada com sucesso.'); }
-  catch (e) { alert('Erro ao alterar senha: ' + (e?.message || e)); }
+  try {
+    await updatePassword(auth.currentUser, nova);
+    alert('Senha alterada com sucesso.');
+  } catch (e) {
+    alert('Erro ao alterar senha: ' + (e?.message || e));
+  }
 });
 
 onAuthStateChanged(auth, async (user) => {
@@ -129,6 +133,7 @@ onAuthStateChanged(auth, async (user) => {
     currentCaixaRef = null;
     return;
   }
+
   const uref = doc(db, 'users', user.uid);
   const snap = await getDoc(uref);
   currentUserDoc = snap.data();
@@ -136,11 +141,13 @@ onAuthStateChanged(auth, async (user) => {
     await updateDoc(uref, { admin: true });
     currentUserDoc.admin = true;
   }
+
   authArea.classList.add('hidden');
   appArea.classList.remove('hidden');
   btnLogout.classList.remove('hidden');
   btnChangePass.classList.remove('hidden');
   matRecebedor.value = currentUserDoc.matricula;
+
   userBadge.textContent = `${currentUserDoc.nome} • ${currentUserDoc.matricula}`;
   userBadge.classList.remove('hidden');
   if (currentUserDoc.admin) userBadge.classList.add('admin'); else userBadge.classList.remove('admin');
@@ -166,8 +173,16 @@ async function detectOrUpdateCaixaStatus() {
   }
 }
 
-function setStatusUI(status) { caixaStatusEl.textContent = status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'; }
-function enableWorkflows(aberto) { btnAbrir.disabled = !!aberto; btnFechar.disabled = !aberto; lancBox.classList.toggle('hidden', !aberto); sangriaBox.classList.toggle('hidden', !aberto); }
+function setStatusUI(status) {
+  caixaStatusEl.textContent = status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado';
+}
+
+function enableWorkflows(aberto) {
+  btnAbrir.disabled = !!aberto;
+  btnFechar.disabled = !aberto;
+  lancBox.classList.toggle('hidden', !aberto);
+  sangriaBox.classList.toggle('hidden', !aberto);
+}
 
 // ---- Caixa controls ----
 btnAbrir.addEventListener('click', async () => {
@@ -175,10 +190,11 @@ btnAbrir.addEventListener('click', async () => {
   const q1 = query(collection(db, 'users', uid, 'caixas'), where('status', '==', 'aberto'));
   const openDocs = await getDocs(q1);
   if (!openDocs.empty) return alert('Você já possui um caixa aberto.');
+
   const caixa = {
     status: 'aberto',
     createdAt: serverTimestamp(),
-    data: dataCaixa.value,
+    data: dataCaixa.value,         
     matricula: currentUserDoc.matricula,
     nome: currentUserDoc.nome
   };
@@ -201,7 +217,7 @@ btnFechar.addEventListener('click', async () => {
   relatorioLista.textContent = 'Caixa encerrado. Abra um novo quando necessário.';
 });
 
-// ---- Lançamentos e Recibos ----
+// ---- Lançamentos e Sangrias ----
 $('#btnSalvarLanc').addEventListener('click', async () => {
   if (!currentCaixaRef) return alert('Abra um caixa primeiro.');
   const dados = {
@@ -218,29 +234,28 @@ $('#btnSalvarLanc').addEventListener('click', async () => {
 
   const ref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'lancamentos');
   await addDoc(ref, dados);
-
   await renderParcial();
   printThermalReceipt(dados);
 });
 
 $('#btnRegistrarSangria').addEventListener('click', async () => {
   if (!currentCaixaRef) return alert('Abra um caixa primeiro.');
-  const valor = Number($('#sangriaValor').value || 0);
+  const valorS = Number($('#sangriaValor').value || 0);
   const motivo = ($('#sangriaMotivo').value || '').trim();
-  if (valor <= 0 || !motivo) return alert('Informe valor e motivo da sangria.');
+  if (valorS <= 0 || !motivo) return alert('Informe valor e motivo da sangria.');
   const ref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'sangrias');
-  await addDoc(ref, { valor, motivo, createdAt: serverTimestamp() });
+  await addDoc(ref, { valor: valorS, motivo, createdAt: serverTimestamp() });
   $('#sangriaValor').value = ''; $('#sangriaMotivo').value='';
   await renderParcial();
   alert('Sangria registrada.');
 });
 
-// ---- Render parcial (relatório tela) ----
+// ---- Render parcial com hora ----
 async function renderParcial() {
   const base = `Usuário: ${currentUserDoc.nome} • Matrícula: ${currentUserDoc.matricula}\n`;
   const lref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'lancamentos');
-  const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
   const sref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'sangrias');
+  const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
   const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
 
   let total = 0;
@@ -248,7 +263,8 @@ async function renderParcial() {
   lqs.forEach(d => {
     const x = d.data();
     total += Number(x.valor||0);
-    out += `• ${formatISOtoBR(x.dataCaixa)} ${x.prefixo} ${x.tipoValidador} Qtd:${x.qtdBordos} Valor:${fmtMoney(x.valor)} Mot:${x.matriculaMotorista}\n`;
+    const horaLancamento = x.createdAt?.toDate ? x.createdAt.toDate().toLocaleTimeString('pt-BR') : '';
+    out += `• ${formatISOtoBR(x.dataCaixa)} ${horaLancamento} ${x.prefixo} ${x.tipoValidador} Qtd:${x.qtdBordos} Valor:${fmtMoney(x.valor)} Mot:${x.matriculaMotorista}\n`;
   });
 
   let totalS = 0;
@@ -307,7 +323,7 @@ function printThermalReceipt(data) {
   win.document.close();
 }
 
-// ---- PDF relatório ----
+// ---- PDF relatório completo com hora ----
 async function gerarRelatorioPDF() {
   const { jsPDF } = window.jspdf;
   const docpdf = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -344,17 +360,13 @@ async function gerarRelatorioPDF() {
     const caixaData = caixaSnap.data();
     let aberturaTxt = "";
     if (caixaData?.data) {
-      const aberturaHora = caixaData?.createdAt?.toDate 
-                          ? caixaData.createdAt.toDate().toLocaleTimeString("pt-BR") 
-                          : "";
+      const aberturaHora = caixaData?.createdAt?.toDate ? caixaData.createdAt.toDate().toLocaleTimeString("pt-BR") : "";
       aberturaTxt = formatISOtoBR(caixaData.data) + (aberturaHora ? " " + aberturaHora : "");
     }
 
-    docpdf.text(`Operador: ${currentUserDoc.nome}  • Matrícula: ${currentUserDoc.matricula}`, 40, y);
-    y += 16;
+    docpdf.text(`Operador: ${currentUserDoc.nome}  • Matrícula: ${currentUserDoc.matricula}`, 40, y); y += 16;
     if (aberturaTxt) { docpdf.text(`Abertura do caixa: ${aberturaTxt}`, 40, y); y += 16; }
-    docpdf.text(`Data do fechamento: ${dataHoraBR}`, 40, y);
-    y += 22;
+    docpdf.text(`Data do fechamento: ${dataHoraBR}`, 40, y); y += 22;
 
     const lref = collection(db, 'users', uid, 'caixas', cid, 'lancamentos');
     const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
@@ -362,15 +374,16 @@ async function gerarRelatorioPDF() {
     let total = 0;
     lqs.forEach(d => {
       const x = d.data();
+      total += Number(x.valor || 0);
+      let horaLancamento = x.createdAt?.toDate ? x.createdAt.toDate().toLocaleTimeString("pt-BR") : '';
       lancamentosBody.push([
-        formatISOtoBR(x.dataCaixa),
+        `${formatISOtoBR(x.dataCaixa)} ${horaLancamento}`,
         x.prefixo || '',
         x.tipoValidador || '',
         x.qtdBordos || '',
         fmtMoney(x.valor) || 'R$ 0,00',
         x.matriculaMotorista || ''
       ]);
-      total += Number(x.valor || 0);
     });
 
     docpdf.autoTable({
@@ -380,7 +393,10 @@ async function gerarRelatorioPDF() {
       theme: 'grid',
       headStyles: { fillColor: [200,200,200], textColor: 20, fontStyle: 'bold' },
       styles: { fontSize: 10, halign: 'center' },
-      columnStyles: { 0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'right' }, 5: { halign: 'center' } }
+      columnStyles: {
+        0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' },
+        3: { halign: 'center' }, 4: { halign: 'right' }, 5: { halign: 'center' }
+      }
     });
 
     let y2 = docpdf.lastAutoTable.finalY + 20;
@@ -390,7 +406,13 @@ async function gerarRelatorioPDF() {
     const sangriasBody = [];
     let totalS = 0;
     if (sqs.empty) { sangriasBody.push(['— Nenhuma', '']); } 
-    else { sqs.forEach(d => { const x=d.data(); sangriasBody.push([fmtMoney(x.valor), x.motivo||'']); totalS+=Number(x.valor||0); }); }
+    else {
+      sqs.forEach(d => {
+        const x = d.data();
+        sangriasBody.push([fmtMoney(x.valor), x.motivo || '']);
+        totalS += Number(x.valor || 0);
+      });
+    }
 
     docpdf.autoTable({
       startY: y2,
@@ -413,7 +435,6 @@ async function gerarRelatorioPDF() {
 
     const hojeNome = hoje.toLocaleDateString("pt-BR").replace(/\//g, "-");
     const fileName = `${currentUserDoc.matricula}-${hojeNome}.pdf`;
-
     docpdf.save(fileName);
   };
 }
