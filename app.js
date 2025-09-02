@@ -6,104 +6,185 @@ import {
 
 // ---- Helpers ----
 const $ = (sel) => document.querySelector(sel);
-const fmtMoney = (v) => v?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'R$ 0,00';
-const todayISO = () => new Date().toISOString().split("T")[0];
-const formatISOtoBR = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  return d.toLocaleDateString('pt-BR');
+const fmtMoney = (v) => (Number(v || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const todayISO = () => {
+  const d = new Date();
+  return d.toLocaleDateString('pt-BR').split('/').reverse().join('-');
 };
 
-// ---- Estado global ----
-let currentUser = null;
+function formatISOtoBR(isoDate) {
+  if (!isoDate) return "";
+  const [y, m, d] = isoDate.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+const adminsMat = new Set(['4144','70029','6266']);
+const emailFromMat = (mat) => `${mat}@movebuss.com`;
+
+// State
 let currentUserDoc = null;
 let currentCaixaRef = null;
 
-// ---- Autenticação ----
+// Elements
+const authArea = $('#authArea');
+const appArea = $('#appArea');
+const userBadge = $('#userBadge');
+const btnLogin = $('#btnLogin');
+const btnRegistrar = $('#btnRegistrar');
+const btnLogout = $('#btnLogout');
+const btnChangePass = $('#btnChangePass');
+const btnAbrir = $('#btnAbrir');
+const btnFechar = $('#btnFechar');
+const caixaStatusEl = $('#caixaStatus');
+
+// Forms
+const loginMatricula = $('#loginMatricula');
+const loginSenha = $('#loginSenha');
+const cadNome = $('#cadNome');
+const cadMatricula = $('#cadMatricula');
+const cadSenha = $('#cadSenha');
+
+const lancBox = $('#lancamentoBox');
+const sangriaBox = $('#sangriaBox');
+const relatorioLista = $('#relatorioLista');
+const matRecebedor = $('#matRecebedor');
+
+const qtdBordos = $('#qtdBordos');
+const valor = $('#valor');
+const tipoVal = $('#tipoVal');
+const prefixo = $('#prefixo');
+const dataCaixa = $('#dataCaixa');
+const matMotorista = $('#matMotorista');
+
+// Atualiza valor automaticamente
+const updateValor = () => {
+  const q = Number(qtdBordos.value || 0);
+  valor.value = (q * 5).toFixed(2);
+};
+qtdBordos.addEventListener('input', updateValor);
+
+// Prefixo: apenas dígitos e máximo 3
+prefixo.addEventListener('input', () => {
+  prefixo.value = prefixo.value.replace(/\D/g, '').slice(0,3);
+});
+
+// Data default
+dataCaixa.value = todayISO();
+
+// ---- Auth flows ----
+btnRegistrar.addEventListener('click', async () => {
+  const nome = cadNome.value.trim();
+  const mat = cadMatricula.value.trim();
+  const senha = cadSenha.value;
+  if (!nome || !mat || !senha) return alert('Preencha nome, matrícula e senha.');
+
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, emailFromMat(mat), senha);
+    const isAdmin = adminsMat.has(mat);
+    await setDoc(doc(db, 'users', cred.user.uid), {
+      nome, matricula: mat, admin: isAdmin, createdAt: serverTimestamp()
+    });
+    alert('Conta criada! Faça login com sua matrícula e senha.');
+    cadNome.value = cadMatricula.value = cadSenha.value = '';
+    loginMatricula.value = mat;
+    loginSenha.value = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (e) {
+    console.error(e);
+    alert('Erro ao criar conta: ' + (e?.message || e));
+  }
+});
+
+btnLogin.addEventListener('click', async () => {
+  const mat = loginMatricula.value.trim();
+  const senha = loginSenha.value;
+  if (!mat || !senha) return alert('Informe matrícula e senha.');
+  try { await signInWithEmailAndPassword(auth, emailFromMat(mat), senha); }
+  catch (e) { alert('Falha no login: ' + (e?.message || e)); }
+});
+
+btnLogout.addEventListener('click', async () => { await signOut(auth); });
+
+btnChangePass.addEventListener('click', async () => {
+  const nova = prompt('Digite a nova senha:');
+  if (!nova) return;
+  try { await updatePassword(auth.currentUser, nova); alert('Senha alterada com sucesso.'); }
+  catch (e) { alert('Erro ao alterar senha: ' + (e?.message || e)); }
+});
+
 onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    currentUser = user;
-    const userDoc = await getDoc(doc(db, "users", user.uid));
-    currentUserDoc = userDoc.data();
-    if (!currentUserDoc) return;
-    $('#loginScreen').style.display = 'none';
-    $('#mainScreen').style.display = 'block';
-    $('#welcomeUser').textContent = `Bem-vindo, ${currentUserDoc.nome}`;
-    await checkCaixaAberto();
-  } else {
-    currentUser = null;
-    currentUserDoc = null;
-    $('#loginScreen').style.display = 'block';
-    $('#mainScreen').style.display = 'none';
+  if (!user) {
+    authArea.classList.remove('hidden'); appArea.classList.add('hidden'); userBadge.classList.add('hidden');
+    btnLogout.classList.add('hidden'); btnChangePass.classList.add('hidden');
+    currentUserDoc = null; currentCaixaRef = null;
+    return;
   }
-});
 
-$('#btnLogin').addEventListener('click', async () => {
-  const matricula = $('#loginMatricula').value.trim();
-  const senha = $('#loginSenha').value;
-  const snap = await getDocs(query(collection(db, "users"), where("matricula", "==", matricula)));
-  if (snap.empty) return alert("Matrícula não encontrada.");
-  const user = snap.docs[0];
-  try {
-    await signInWithEmailAndPassword(auth, user.data().email, senha);
-  } catch (err) {
-    alert("Erro no login.");
+  const uref = doc(db, 'users', user.uid);
+  const snap = await getDoc(uref);
+  currentUserDoc = snap.data();
+  if (adminsMat.has(currentUserDoc?.matricula) && !currentUserDoc.admin) {
+    await updateDoc(uref, { admin: true });
+    currentUserDoc.admin = true;
   }
-});
 
-$('#btnLogout').addEventListener('click', () => signOut(auth));
+  authArea.classList.add('hidden'); appArea.classList.remove('hidden');
+  btnLogout.classList.remove('hidden'); btnChangePass.classList.remove('hidden');
+  matRecebedor.value = currentUserDoc.matricula;
 
-$('#btnRegister').addEventListener('click', async () => {
-  const matricula = $('#regMatricula').value.trim();
-  const nome = $('#regNome').value.trim();
-  const senha = $('#regSenha').value;
-  const email = `${matricula}@fake.com`;
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, email, senha);
-    await setDoc(doc(db, "users", cred.user.uid), { matricula, nome, email });
-    alert("Usuário cadastrado!");
-    $('#registerScreen').style.display = 'none';
-    $('#loginScreen').style.display = 'block';
-  } catch (err) {
-    alert("Erro ao registrar.");
-  }
+  userBadge.textContent = `${currentUserDoc.nome} • ${currentUserDoc.matricula}`;
+  userBadge.classList.remove('hidden');
+  if (currentUserDoc.admin) userBadge.classList.add('admin'); else userBadge.classList.remove('admin');
+
+  await detectOrUpdateCaixaStatus();
 });
 
 // ---- Caixa ----
-async function checkCaixaAberto() {
-  const caixasRef = collection(db, "users", currentUser.uid, "caixas");
-  const qs = await getDocs(query(caixasRef, where("status", "==", "aberto")));
-  if (!qs.empty) {
-    const caixa = qs.docs[0];
-    currentCaixaRef = { userId: currentUser.uid, caixaId: caixa.id };
-    $('#caixaStatus').textContent = "Caixa Aberto";
+async function detectOrUpdateCaixaStatus() {
+  const uid = auth.currentUser.uid;
+  const q1 = query(collection(db, 'users', uid, 'caixas'), where('status', '==', 'aberto'));
+  const abertos = await getDocs(q1);
+  if (!abertos.empty) {
+    const docRef = abertos.docs[0].ref;
+    currentCaixaRef = { userId: uid, caixaId: docRef.id };
+    setStatusUI('aberto'); enableWorkflows(true);
     await renderParcial();
   } else {
-    currentCaixaRef = null;
-    $('#caixaStatus').textContent = "Nenhum caixa aberto";
+    currentCaixaRef = null; setStatusUI('fechado'); enableWorkflows(false);
+    relatorioLista.textContent = 'Sem lançamentos. Abra um caixa para iniciar.';
   }
 }
 
-$('#btnAbrirCaixa').addEventListener('click', async () => {
-  const ref = await addDoc(collection(db, "users", currentUser.uid, "caixas"), {
-    status: "aberto",
-    data: todayISO(),
-    createdAt: serverTimestamp()
-  });
-  currentCaixaRef = { userId: currentUser.uid, caixaId: ref.id };
-  $('#caixaStatus').textContent = "Caixa Aberto";
+function setStatusUI(status) { caixaStatusEl.textContent = status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'; }
+function enableWorkflows(aberto) {
+  btnAbrir.disabled = !!aberto; btnFechar.disabled = !aberto;
+  lancBox.classList.toggle('hidden', !aberto); sangriaBox.classList.toggle('hidden', !aberto);
+}
+
+btnAbrir.addEventListener('click', async () => {
+  const uid = auth.currentUser.uid;
+  const q1 = query(collection(db, 'users', uid, 'caixas'), where('status', '==', 'aberto'));
+  const openDocs = await getDocs(q1);
+  if (!openDocs.empty) return alert('Você já possui um caixa aberto.');
+
+  const caixa = {
+    status: 'aberto', createdAt: serverTimestamp(),
+    data: dataCaixa.value,
+    matricula: currentUserDoc.matricula, nome: currentUserDoc.nome
+  };
+  const ref = await addDoc(collection(db, 'users', uid, 'caixas'), caixa);
+  currentCaixaRef = { userId: uid, caixaId: ref.id }; setStatusUI('aberto'); enableWorkflows(true);
+  await renderParcial(); alert('Caixa aberto com sucesso.');
 });
 
-$('#btnFecharCaixa').addEventListener('click', async () => {
-  if (!currentCaixaRef) return alert("Nenhum caixa aberto.");
-  await updateDoc(doc(db, "users", currentCaixaRef.userId, "caixas", currentCaixaRef.caixaId), {
-    status: "fechado",
-    closedAt: serverTimestamp()
-  });
-  gerarRelatorioPDF();
-  currentCaixaRef = null;
-  $('#caixaStatus').textContent = "Caixa Fechado";
+btnFechar.addEventListener('click', async () => {
+  if (!currentCaixaRef) return;
+  await gerarRelatorioPDF();
+  const ref = doc(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId);
+  await updateDoc(ref, { status: 'fechado', closedAt: serverTimestamp() });
+  currentCaixaRef = null; setStatusUI('fechado'); enableWorkflows(false);
+  relatorioLista.textContent = 'Caixa encerrado. Abra um novo quando necessário.';
 });
 
 // ---- Lançamentos ----
@@ -120,67 +201,109 @@ $('#btnSalvarLanc').addEventListener('click', async () => {
     createdAt: serverTimestamp()
   };
   if (!dados.qtdBordos || !dados.matriculaMotorista) return alert('Informe a quantidade e a matrícula do motorista.');
-  
-  const ref = collection(
-    db, 
-    'users', 
-    currentCaixaRef.userId, 
-    'caixas', 
-    currentCaixaRef.caixaId, 
-    'lancamentos'
-  );
-
+  const ref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'lancamentos');
   await addDoc(ref, dados);
   await renderParcial();
   printThermalReceipt(dados);
 
-  // 🔹 limpar os campos após salvar
-  tipoVal.value = "PRODATA";
-  qtdBordos.value = 1;
-  valor.value = "";
-  prefixo.value = "";
-  dataCaixa.value = todayISO();
-  matMotorista.value = "";
+  // Limpa os campos no site após gerar recibo
+  qtdBordos.value = '';
+  valor.value = '';
+  tipoVal.value = '';
+  prefixo.value = '';
+  matMotorista.value = '';
 });
 
-// ---- Renderização parcial ----
+$('#btnRegistrarSangria').addEventListener('click', async () => {
+  if (!currentCaixaRef) return alert('Abra um caixa primeiro.');
+  const valorS = Number($('#sangriaValor').value || 0);
+  const motivo = ($('#sangriaMotivo').value || '').trim();
+  if (valorS <= 0 || !motivo) return alert('Informe valor e motivo da sangria.');
+  const ref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'sangrias');
+  await addDoc(ref, { valor: valorS, motivo, createdAt: serverTimestamp() });
+  $('#sangriaValor').value = ''; $('#sangriaMotivo').value=''; await renderParcial();
+  alert('Sangria registrada.');
+});
+
+// ---- Relatório parcial com hora ----
 async function renderParcial() {
-  if (!currentCaixaRef) return;
-  const ref = collection(db, "users", currentCaixaRef.userId, "caixas", currentCaixaRef.caixaId, "lancamentos");
-  const qs = await getDocs(ref);
-  let total = 0;
-  qs.forEach(d => total += Number(d.data().valor || 0));
-  $('#totalParcial').textContent = fmtMoney(total);
+  const base = `Usuário: ${currentUserDoc.nome} • Matrícula: ${currentUserDoc.matricula}\n`;
+  const lref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'lancamentos');
+  const sref = collection(db, 'users', currentCaixaRef.userId, 'caixas', currentCaixaRef.caixaId, 'sangrias');
+  const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
+  const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
+  let total = 0; let out = base + '\nLANÇAMENTOS:\n';
+  lqs.forEach(d => {
+    const x = d.data();
+    total += Number(x.valor||0);
+    const horaLancamento = x.createdAt?.toDate ? x.createdAt.toDate().toLocaleTimeString('pt-BR') : '';
+    out += `• ${horaLancamento} ${formatISOtoBR(x.dataCaixa)} ${x.prefixo} ${x.tipoValidador} Qtd:${x.qtdBordos} Valor:${fmtMoney(x.valor)} Mot:${x.matriculaMotorista}\n`;
+  });
+  let totalS = 0;
+  if (!sqs.empty) {
+    out += '\nSANGRIAS:\n';
+    sqs.forEach(d => { const x = d.data(); totalS += Number(x.valor||0); out += `• ${fmtMoney(x.valor)} — ${x.motivo}\n`; });
+  }
+  out += `\nTOTAL LANÇAMENTOS: ${fmtMoney(total)}\n`;
+  out += `TOTAL SANGRIAS: ${fmtMoney(totalS)}\n`;
+  out += `TOTAL CORRIGIDO: ${fmtMoney(total - totalS)}\n`;
+  relatorioLista.textContent = out;
 }
 
-// ---- PDF relatório ----
+// ---- Recibo térmico ----
+function printThermalReceipt(data) {
+  const win = window.open('', '_blank', 'width=400,height=800');
+  const now = new Date();
+  const dt = now.toLocaleString('pt-BR');
+  const dataCaixaBR = formatISOtoBR(data.dataCaixa);
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Recibo</title>
+<style>@page { size: 80mm 148mm; margin: 0; } body { font-family: "Lucida Sans", monospace; font-size: 12px; margin: 0; padding: 0; } h1 { text-align: center; font-size: 15px; margin: 8px 0 12px; } .mono { font-family: "Lucida Sans", monospace; white-space: pre-wrap; }</style>
+</head>
+<body onload="window.print(); setTimeout(()=>window.close(), 500);">
+<h1>RECIBO DE PAGAMENTO MANUAL</h1>
+--------------------------------------------------------------------
+<div class="mono">
+<strong>Matricula Motorista:</strong> ${data.matriculaMotorista}<br>
+<strong>Tipo de Validador:</strong> ${data.tipoValidador}<br>
+<strong>Prefixo:</strong> ${data.prefixo}<br>
+--------------------------------------------------------------------
+<strong>Data do Caixa:</strong> ${dataCaixaBR}<br>
+<strong>Quantidade bordos:</strong> ${data.qtdBordos}<br>
+<strong>Valor:</strong> R$ ${Number(data.valor).toFixed(2)}<br>
+--------------------------------------------------------------------
+<strong>Matricula Recebedor:</strong> ${data.matriculaRecebedor}<br>
+<strong>Data Recebimento:</strong> ${dt}<br><br>
+<strong>Assinatura Recebedor:</strong><br> ________________________________
+</div>
+</body></html>`;
+
+  win.document.write(html); win.document.close();
+}
+
+// ---- PDF relatório completo com hora ----
 async function gerarRelatorioPDF() {
   const { jsPDF } = window.jspdf;
   const docpdf = new jsPDF({ unit: 'pt', format: 'a4' });
   const uid = currentCaixaRef.userId;
   const cid = currentCaixaRef.caixaId;
 
-  const logo = new Image(); logo.src = "./assets/logo.png";
-
+  const logo = new Image();
+  logo.src = "./assets/logo.png";
   logo.onload = async () => {
     const pageWidth = docpdf.internal.pageSize.getWidth();
     const logoWidth = 120; const logoHeight = 60;
     const logoX = (pageWidth - logoWidth) / 2;
     docpdf.addImage(logo, 'PNG', logoX, 30, logoWidth, logoHeight);
+    docpdf.setDrawColor(0,128,0); docpdf.setLineWidth(1.2); docpdf.line(40,100,pageWidth-40,100);
+    let y = 120; docpdf.setFont('helvetica','bold'); docpdf.setFontSize(16);
+    docpdf.text('Relatório de Fechamento de Caixa', pageWidth/2, y, {align:'center'});
+    y += 30; docpdf.setFontSize(11); docpdf.setFont('helvetica','normal');
 
-    docpdf.setDrawColor(0, 128, 0); docpdf.setLineWidth(1.2);
-    docpdf.line(40, 100, pageWidth - 40, 100);
-
-    let y = 120;
-    docpdf.setFont('helvetica','bold'); docpdf.setFontSize(16);
-    docpdf.text('Relatório de Fechamento de Caixa', pageWidth / 2, y, { align: 'center' });
-    y += 30;
-
-    docpdf.setFontSize(11); docpdf.setFont('helvetica','normal');
     const hoje = new Date();
     const dataHoraBR = hoje.toLocaleDateString('pt-BR') + " " + hoje.toLocaleTimeString('pt-BR');
-
-    const caixaSnap = await getDoc(doc(db, 'users', uid, 'caixas', cid));
+    const caixaSnap = await getDoc(doc(db,'users',uid,'caixas',cid));
     const caixaData = caixaSnap.data();
     let aberturaTxt = "";
     if (caixaData?.data) {
@@ -188,69 +311,55 @@ async function gerarRelatorioPDF() {
       aberturaTxt = formatISOtoBR(caixaData.data) + (aberturaHora ? " " + aberturaHora : "");
     }
 
-    docpdf.text(`Operador: ${currentUserDoc.nome}  • Matrícula: ${currentUserDoc.matricula}`, 40, y); y += 16;
-    if (aberturaTxt) { docpdf.text(`Abertura do caixa: ${aberturaTxt}`, 40, y); y += 16; }
-    docpdf.text(`Data do fechamento: ${dataHoraBR}`, 40, y); y += 22;
+    docpdf.text(`Operador: ${currentUserDoc.nome} • Matrícula: ${currentUserDoc.matricula}`, 40, y); y+=16;
+    if (aberturaTxt){ docpdf.text(`Abertura do caixa: ${aberturaTxt}`, 40, y); y+=16; }
+    docpdf.text(`Data do fechamento: ${dataHoraBR}`, 40, y); y+=22;
 
     // --- Lançamentos ---
-    const lref = collection(db, 'users', uid, 'caixas', cid, 'lancamentos');
+    const lref = collection(db,'users',uid,'caixas',cid,'lancamentos');
     const lqs = await getDocs(query(lref, orderBy('createdAt','asc')));
-    const lancamentosBody = []; let total = 0;
-    lqs.forEach(d => {
-      const x = d.data(); total += Number(x.valor || 0);
-      const horaLancamento = x.createdAt?.toDate ? x.createdAt.toDate().toLocaleTimeString("pt-BR") : '';
-      lancamentosBody.push([
-        horaLancamento,
-        formatISOtoBR(x.dataCaixa),
-        x.prefixo||'',
-        x.tipoValidador||'',
-        x.qtdBordos||'',
-        fmtMoney(x.valor)||'R$ 0,00',
-        x.matriculaMotorista||''
-      ]);
+    const lancamentosBody = []; let total=0;
+    lqs.forEach(d=>{
+      const x=d.data();
+      total+=Number(x.valor||0);
+      const horaLancamento = x.createdAt?.toDate ? x.createdAt.toDate().toLocaleTimeString("pt-BR"):'';
+      lancamentosBody.push([horaLancamento, formatISOtoBR(x.dataCaixa), x.prefixo||'', x.tipoValidador||'', x.qtdBordos||'', fmtMoney(x.valor)||'R$ 0,00', x.matriculaMotorista||'']);
     });
 
     docpdf.autoTable({
-      startY: y,
-      head: [['Horário','Data','Prefixo','Validador','Qtd Bordos','Valor','Motorista']],
-      body: lancamentosBody,
-      theme: 'grid',
-      headStyles: { fillColor: [50,50,50], textColor: 255, halign: 'center' },
-      bodyStyles: { halign: 'center' },
-      columnStyles: {4:{halign:'center'},5:{halign:'right'}}
+      startY:y,
+      head:[['Horário','Data','Prefixo','Validador','Qtd Bordos','Valor','Motorista']],
+      body:lancamentosBody,
+      theme:'grid',
+      headStyles:{fillColor:[50,50,50],textColor:255,halign:'center'},
+      bodyStyles:{halign:'center'},
+      columnStyles:{4:{halign:'center'},5:{halign:'right'}}
     });
-
     y = docpdf.lastAutoTable.finalY + 20;
 
     // --- Sangrias ---
-    const sref = collection(db, 'users', uid, 'caixas', cid, 'sangrias');
+    const sref = collection(db,'users',uid,'caixas',cid,'sangrias');
     const sqs = await getDocs(query(sref, orderBy('createdAt','asc')));
-    const sangriasBody = []; let totalS = 0;
-    if (!sqs.empty) {
-      sqs.forEach(d => { const x = d.data(); totalS += Number(x.valor||0); sangriasBody.push([fmtMoney(x.valor), x.motivo||'']); });
-    } else sangriasBody.push(['R$ 0,00', 'Nenhuma']);
-
+    const sangriasBody=[]; let totalS=0;
+    if(!sqs.empty){ sqs.forEach(d=>{ const x=d.data(); totalS+=Number(x.valor||0); sangriasBody.push([fmtMoney(x.valor),x.motivo||'']); }); }
+    else sangriasBody.push(['R$ 0,00','Nenhuma']);
     docpdf.autoTable({
-      startY: y,
-      head: [['Valor','Motivo']],
-      body: sangriasBody,
-      theme: 'grid',
-      headStyles: { fillColor: [50,50,50], textColor: 255, halign: 'center' },
-      bodyStyles: { halign: 'center' }
+      startY:y,
+      head:[['Valor','Motivo']],
+      body:sangriasBody,
+      theme:'grid',
+      headStyles:{fillColor:[50,50,50],textColor:255,halign:'center'},
+      bodyStyles:{halign:'center'}
     });
-
     y = docpdf.lastAutoTable.finalY + 14;
-    docpdf.text(`Total Lançamentos: ${fmtMoney(total)}`, 40, y); y+=14;
-    docpdf.text(`Total Sangrias: ${fmtMoney(totalS)}`, 40, y); y+=14;
-    docpdf.text(`Total Corrigido: ${fmtMoney(total - totalS)}`, 40, y); y+=22;
 
-    // 🔹 Nome do arquivo: matricula-data_hora.pdf
-    const matricula = currentUserDoc.matricula;
-    const agora = new Date();
-    const dataBR = agora.toLocaleDateString("pt-BR").replace(/\//g, "-");
-    const horaBR = agora.toLocaleTimeString("pt-BR", { hour12: false }).replace(/:/g, "-");
-    const nomeArquivo = `${matricula}-${dataBR}_${horaBR}.pdf`;
+    docpdf.text(`Total Lançamentos: ${fmtMoney(total)}`,40,y); y+=14;
+    docpdf.text(`Total Sangrias: ${fmtMoney(totalS)}`,40,y); y+=14;
+    docpdf.text(`Total Corrigido: ${fmtMoney(total-totalS)}`,40,y); y+=22;
 
+    // --- Nome do PDF: matricula-data-hora.minuto ---
+    const d = hoje;
+    const nomeArquivo = `${currentUserDoc.matricula}-${d.toLocaleDateString('pt-BR').split('/').reverse().join('-')}-${d.getHours()}.${d.getMinutes()}.pdf`;
     docpdf.save(nomeArquivo);
   };
 }
